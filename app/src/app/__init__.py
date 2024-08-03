@@ -1,15 +1,18 @@
-from typing import Literal
+from typing import Any
 
-from fastapi import FastAPI
+from aws_lambda_powertools.utilities.parser import event_parser
+from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import BaseModel
 
-app = FastAPI()
+
+class Request(BaseModel):
+    question: str
 
 
-class RootResponse(BaseModel):
-    status: Literal["ok"] = "ok"
+class Response(BaseModel):
+    answer: str
 
 
-@app.get("/")
-def root() -> RootResponse:
-    return RootResponse()
+@event_parser()
+def handler(event: Request, context: LambdaContext) -> dict[str, Any]:
+    return Response(answer=event.question + "!!!").model_dump()

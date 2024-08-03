@@ -1,33 +1,20 @@
 # syntax=docker/dockerfile:1
 
-ARG PYTHON_VERSION=3.12
-FROM python:${PYTHON_VERSION}-slim as base
+FROM public.ecr.aws/lambda/python:3.12 as base
 
-WORKDIR /var/task
+RUN pip install poetry==1.8.3 && poetry self add poetry-plugin-bundle==1.4.0
 
-RUN pip install poetry
-RUN poetry self add poetry-plugin-bundle
+RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=poetry.lock,target=poetry.lock \
+    poetry export --without-hashes --format constraints.txt --without dev --output /opt/constraints.txt
 
+RUN --mount=type=bind,target=. \
+    poetry build --format wheel --output /opt
 
-COPY . .
-RUN poetry bundle venv --without dev .venv
+FROM public.ecr.aws/lambda/python:3.12 as final
 
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,from=base,source=/opt/,target=/opt/ \
+    pip install /opt/*.whl --constraint /opt/constraints.txt
 
-
-FROM python:${PYTHON_VERSION}-slim as final
-
-WORKDIR /var/task
-
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
-
-COPY --from=base /var/task/.venv /var/task/.venv
-COPY --from=base /var/task/main.py /var/task/
-
-ENV PATH=/var/task/.venv/bin:${PATH}
-
-# CMD sleep infinity
-CMD fastapi run
+CMD [ "app.handler" ]
