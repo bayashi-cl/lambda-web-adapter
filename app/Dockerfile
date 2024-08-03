@@ -2,7 +2,7 @@
 
 FROM public.ecr.aws/lambda/python:3.12 as base
 
-RUN pip install poetry==1.8.3 && poetry self add poetry-plugin-bundle==1.4.0
+RUN pip install poetry==1.8.3 && poetry self add poetry-plugin-export==1.8.0
 
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=poetry.lock,target=poetry.lock \
