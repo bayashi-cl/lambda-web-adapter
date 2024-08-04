@@ -2,6 +2,8 @@ from typing import Literal
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -12,7 +14,7 @@ class CheckResponse(BaseModel):
 
 
 @app.get("/check")
-def root() -> CheckResponse:
+def check() -> CheckResponse:
     return CheckResponse()
 
 
@@ -30,3 +32,11 @@ def app_() -> AppResponse:
     print(resp.status_code)
     print(resp.json())
     return AppResponse(message=resp.json()["answer"])
+
+
+# app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+
+
+# @app.get("/")
+# def root() -> RedirectResponse:
+#     return RedirectResponse("/static")

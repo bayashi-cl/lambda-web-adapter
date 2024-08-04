@@ -30,9 +30,9 @@ class InfraStack(Stack):
         )
 
         runtime: aws_lambda.Runtime = aws_lambda.Runtime.PYTHON_3_12
-        api = aws_lambda.Function(
+        python_deps = aws_lambda.LayerVersion(
             self,
-            "ApiFunction",
+            "PythonDepsLayer",
             code=aws_lambda.Code.from_asset(
                 "../api",
                 bundling=BundlingOptions(
@@ -47,29 +47,39 @@ class InfraStack(Stack):
                         textwrap.dedent(
                             """\
                             set -eux
-                            rsync -C --filter=":- .gitignore" -rLv /asset-input/ /tmp/asset-input
-                            cd /tmp/asset-input
-                            poetry export --without-hashes --format constraints.txt --output constraints.txt
-                            pip install . --constraint constraints.txt --target /asset-output
-                            cp scripts/run-lambda.sh /asset-output
+                            poetry export --without-hashes --format constraints.txt --output /tmp/constraints.txt
+                            pip install . --ignore-installed --constraint /tmp/constraints.txt --prefix /asset-output/python
                             """
+                            # Note:
+                            # The following command does not work well due to symlink.
+                            # ```poetry bundle venv --without dev /asset-output/python```
+                            # See https://github.com/aws/aws-cdk/issues/9251
                         ),
                     ],
                 ),
             ),
+        )
+
+        api = aws_lambda.Function(
+            self,
+            "ApiFunction",
+            code=aws_lambda.Code.from_asset("../api/lambda-scripts"),
             layers=[
+                python_deps,
                 aws_lambda.LayerVersion.from_layer_version_arn(
                     self,
                     "WebAppAdaptorLayer",
                     f"arn:aws:lambda:{self.region}:753240598075:layer:LambdaAdapterLayerX86:23",
-                )
+                ),
             ],
             runtime=runtime,
             environment={
                 "AWS_LAMBDA_EXEC_WRAPPER": "/opt/bootstrap",
-                "PORT": "8000",
+                "AWS_LWA_PORT": "8000",
+                "AWS_LWA_READINESS_CHECK_PATH": "/check",
+                "APP_LAMBDA_ARN": app.function_arn,
             },
-            handler="run-lambda.sh",
+            handler="run.sh",
             log_group=aws_logs.LogGroup(
                 self,
                 "ApiLogGroup",

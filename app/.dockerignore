@@ -33,4 +33,6 @@
 LICENSE
 # README.md
 
-**/.mypy_cache
+**/.*_cache
+dist
+tsets
