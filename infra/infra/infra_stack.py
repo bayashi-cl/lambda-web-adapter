@@ -30,7 +30,7 @@ class InfraStack(Stack):
         )
 
         runtime: aws_lambda.Runtime = aws_lambda.Runtime.PYTHON_3_12
-        python_deps = aws_lambda.LayerVersion(
+        python_deps_layer = aws_lambda.LayerVersion(
             self,
             "PythonDepsLayer",
             code=aws_lambda.Code.from_asset(
@@ -59,13 +59,36 @@ class InfraStack(Stack):
                 ),
             ),
         )
+        front_layer = aws_lambda.LayerVersion(
+            self,
+            "FrontLayer",
+            code=aws_lambda.Code.from_asset(
+                "../front",
+                bundling=BundlingOptions(
+                    image=DockerImage.from_registry("node:lts-slim"),
+                    command=[
+                        "bash",
+                        "-c",
+                        textwrap.dedent(
+                            """\
+                            set -eux
+                            npm ci
+                            npm run build
+                            cp -r dist /asset-output/static
+                            """
+                        ),
+                    ],
+                ),
+            ),
+        )
 
         api = aws_lambda.Function(
             self,
             "ApiFunction",
             code=aws_lambda.Code.from_asset("../api/lambda-scripts"),
             layers=[
-                python_deps,
+                front_layer,
+                python_deps_layer,
                 aws_lambda.LayerVersion.from_layer_version_arn(
                     self,
                     "WebAppAdaptorLayer",
@@ -78,6 +101,7 @@ class InfraStack(Stack):
                 "AWS_LWA_PORT": "8000",
                 "AWS_LWA_READINESS_CHECK_PATH": "/check",
                 "APP_LAMBDA_ARN": app.function_arn,
+                "STATIC_PATH": "/opt/static",
             },
             handler="run.sh",
             log_group=aws_logs.LogGroup(
